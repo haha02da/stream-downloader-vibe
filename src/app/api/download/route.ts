@@ -27,18 +27,27 @@ export async function POST(req: NextRequest) {
     const videoInfo = JSON.parse(stdout);
 
     // 3. Prepare response data
+    // Only include formats with video AND audio (best for simple download)
+    // Or just provide a few common resolutions.
+    const formats = videoInfo.formats
+      ?.filter((f: any) => f.vcodec !== 'none' && (f.acodec !== 'none' || f.audio_ext !== 'none'))
+      .map((f: any) => ({
+        format_id: f.format_id,
+        extension: f.ext,
+        resolution: f.resolution || f.format_note || 'Unknown',
+        filesize: f.filesize || f.filesize_approx,
+        vcodec: f.vcodec,
+        acodec: f.acodec
+      }))
+      .sort((a: any, b: any) => (b.filesize || 0) - (a.filesize || 0)); // Sort by size/quality
+
     const responseData = {
+      id: videoInfo.id,
       title: videoInfo.title,
       thumbnail: videoInfo.thumbnail,
       uploader: videoInfo.uploader,
       duration_string: videoInfo.duration_string,
-      url: videoInfo.url || url, // If it's a direct link or we need to pass it back
-      formats: videoInfo.formats?.map((f: any) => ({
-        format_id: f.format_id,
-        extension: f.ext,
-        resolution: f.resolution,
-        filesize: f.filesize,
-      }))
+      formats: formats?.slice(0, 10) || [] // Limit to 10 best options
     };
 
     return NextResponse.json({ 

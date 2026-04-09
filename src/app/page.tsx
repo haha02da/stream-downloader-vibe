@@ -1,17 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { Download, Youtube, Globe, Info, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
+import { Download, Youtube, Globe, Info, AlertCircle, CheckCircle2, Loader2, ChevronDown, Monitor, Music } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function Home() {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [status, setStatus] = useState<null | 'success' | 'error'>(null);
   const [message, setMessage] = useState('');
   const [videoData, setVideoData] = useState<any>(null);
+  const [selectedFormat, setSelectedFormat] = useState('best');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleFetch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
 
@@ -33,6 +35,10 @@ export default function Home() {
         setStatus('success');
         setMessage('영상을 성공적으로 가져왔습니다!');
         setVideoData(data.videoInfo);
+        // Default to the first format found
+        if (data.videoInfo.formats?.length > 0) {
+          setSelectedFormat(data.videoInfo.formats[0].format_id);
+        }
       } else {
         setStatus('error');
         setMessage(data.error || '다운로드 중 오류가 발생했습니다.');
@@ -43,6 +49,30 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDownload = () => {
+    if (!videoData) return;
+    
+    setDownloading(true);
+    
+    // Construct the stream URL
+    const streamUrl = `/api/stream?url=${encodeURIComponent(url)}&formatId=${selectedFormat}&title=${encodeURIComponent(videoData.title)}`;
+    
+    // Trigger download by creating an invisible anchor tag
+    // This allows browser to handle it as a file download without blocking the UI
+    const link = document.createElement('a');
+    link.href = streamUrl;
+    link.setAttribute('download', `${videoData.title}.mp4`); // Browser will follow Content-Disposition header
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    // Give some feedback that the download started
+    setTimeout(() => {
+        setDownloading(false);
+        setMessage('브라우저에서 다운로드가 시작되었습니다!');
+    }, 2000);
   };
 
   return (
@@ -84,7 +114,7 @@ export default function Home() {
           transition={{ delay: 0.3 }}
           className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-8 shadow-2xl"
         >
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleFetch} className="space-y-6">
             <div className="relative group">
               <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-indigo-400 transition-colors">
                 <Globe className="w-6 h-6" />
@@ -100,7 +130,7 @@ export default function Home() {
             </div>
 
             <button
-              disabled={loading}
+              disabled={loading || downloading}
               className="w-full bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold py-5 rounded-2xl shadow-lg shadow-indigo-500/20 transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-3 text-lg"
             >
               {loading ? (
@@ -111,7 +141,7 @@ export default function Home() {
               ) : (
                 <>
                   <Download className="w-6 h-6" />
-                  다운로드 시작하기
+                  영상 분석하기
                 </>
               )}
             </button>
@@ -140,31 +170,81 @@ export default function Home() {
           <motion.section 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="mt-12 bg-white/5 border border-white/10 rounded-3xl p-8"
+            className="mt-12 bg-white/5 border border-white/10 rounded-3xl p-8 shadow-xl"
           >
-            <div className="flex flex-col md:flex-row gap-8">
-              <div className="w-full md:w-64 h-40 bg-gray-800 rounded-2xl overflow-hidden shrink-0">
-                <img src={videoData.thumbnail} alt="Thumbnail" className="w-full h-full object-cover" />
-              </div>
-              <div className="flex-1">
-                <h3 className="text-2xl font-bold mb-3 line-clamp-2">{videoData.title}</h3>
-                <p className="text-gray-400 mb-6 text-sm flex items-center gap-2">
-                  <Youtube className="w-4 h-4" />
-                  {videoData.uploader} • {videoData.duration_string}
-                </p>
-                <div className="flex flex-wrap gap-4">
-                  <a
-                    href={videoData.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-6 py-3 rounded-xl bg-white text-black font-bold hover:bg-gray-200 transition-colors"
-                  >
-                    직접 링크 보기
-                  </a>
-                  <button className="px-6 py-3 rounded-xl bg-white/10 border border-white/10 hover:bg-white/20 transition-colors">
-                    포맷 선택하기
-                  </button>
+            <div className="flex flex-col lg:flex-row gap-10">
+              <div className="w-full lg:w-72 shrink-0">
+                <div className="aspect-video bg-gray-800 rounded-2xl overflow-hidden shadow-2xl relative group mb-4">
+                  <img src={videoData.thumbnail} alt="Thumbnail" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                    <Youtube className="w-12 h-12 text-red-500 opacity-80" />
+                  </div>
                 </div>
+                <div className="space-y-2">
+                    <h3 className="text-xl font-bold line-clamp-2 leading-tight">{videoData.title}</h3>
+                    <p className="text-gray-400 text-sm flex items-center gap-2">
+                    <Monitor className="w-4 h-4" />
+                    {videoData.uploader} • {videoData.duration_string}
+                    </p>
+                </div>
+              </div>
+
+              <div className="flex-1">
+                <div className="mb-6">
+                  <label className="block text-sm font-semibold text-gray-500 mb-3 uppercase tracking-wider">포맷 및 해상도 선택</label>
+                  <div className="grid grid-cols-1 gap-3">
+                    {videoData.formats && videoData.formats.length > 0 ? (
+                      videoData.formats.map((f: any) => (
+                        <button
+                          key={f.format_id}
+                          onClick={() => setSelectedFormat(f.format_id)}
+                          className={`flex items-center justify-between p-4 rounded-2xl border transition-all text-left ${
+                            selectedFormat === f.format_id
+                              ? 'bg-indigo-500/20 border-indigo-500 text-indigo-400'
+                              : 'bg-white/5 border-white/10 hover:bg-white/10 text-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-4">
+                            <div className={`p-2 rounded-xl ${selectedFormat === f.format_id ? 'bg-indigo-500 text-white' : 'bg-gray-800 text-gray-400'}`}>
+                                {f.vcodec !== 'none' ? <Monitor className="w-5 h-5" /> : <Music className="w-5 h-5" />}
+                            </div>
+                            <div>
+                                <p className="font-bold">{f.resolution} ({f.extension})</p>
+                                <p className="text-xs text-gray-500 italic">Codec: {f.vcodec?.split('.')[0] || 'Unknown'} / {f.acodec?.split('.')[0] || 'None'}</p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-sm font-medium">
+                                {f.filesize ? `${(f.filesize / (1024 * 1024)).toFixed(1)} MB` : 'N/A'}
+                            </span>
+                          </div>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="text-gray-500 italic p-4 bg-white/5 rounded-2xl border border-white/10">
+                        선택 가능한 포맷이 없습니다. 기본 품질로 다운로드합니다.
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleDownload}
+                  disabled={downloading}
+                  className="w-full bg-white text-black font-black py-4 rounded-2xl hover:bg-indigo-400 hover:text-white transition-all active:scale-[0.98] disabled:opacity-50 flex items-center justify-center gap-2 text-lg shadow-xl"
+                >
+                  {downloading ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      다운로드 진행 중...
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-5 h-5" />
+                      지금 컴퓨터에 다운로드
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </motion.section>
