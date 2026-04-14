@@ -14,23 +14,18 @@ const getYTPath = async () => {
   const localBinPath = path.join(process.cwd(), 'bin', 'yt-dlp');
   const tempBinPath = path.join('/tmp', 'yt-dlp');
 
-  // If we are in a serverless environment (Vercel)
   if (fs.existsSync(localBinPath)) {
     try {
-      // Copy to /tmp if not already there or to ensure fresh copy
       if (!fs.existsSync(tempBinPath)) {
         fs.copyFileSync(localBinPath, tempBinPath);
+        fs.chmodSync(tempBinPath, '755');
       }
-      // Set execution permission
-      fs.chmodSync(tempBinPath, '755');
       return tempBinPath;
     } catch (err) {
       console.error('Error setting up yt-dlp in /tmp:', err);
-      return localBinPath; // Fallback to local path
+      return localBinPath;
     }
   }
-  
-  // Fallback to system yt-dlp (for Local development)
   return 'yt-dlp';
 };
 
@@ -43,14 +38,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'URL이 필요합니다.' }, { status: 400 });
     }
 
-    // 1. Check if yt-dlp is installed
+    // Debugging info
+    let pythonVersion = 'Unknown';
+    try {
+      const { stdout } = await execPromise('python3 --version');
+      pythonVersion = stdout.trim();
+    } catch (e) {
+      pythonVersion = 'Not found';
+    }
+
+    // 1. Check if yt-dlp is executable
     try {
       await execPromise(`${YT_PATH} --version`);
     } catch (err: any) {
-      console.error('yt-dlp check error:', err);
+      console.error('yt-dlp execution failed:', err);
       return NextResponse.json({ 
-        error: `서버에 yt-dlp가 설치되어 있지 않거나 실행할 수 없습니다. (Path: ${YT_PATH})`,
-        details: err.message
+        error: `yt-dlp 실행 실패 (Path: ${YT_PATH})`,
+        details: err.message,
+        python: pythonVersion,
+        env: process.env.NODE_ENV
       }, { status: 500 });
     }
 
