@@ -3,16 +3,27 @@ import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 
-const getYTPath = () => {
+const getYTPath = async () => {
   const localBinPath = path.join(process.cwd(), 'bin', 'yt-dlp');
+  const tempBinPath = path.join('/tmp', 'yt-dlp');
+
   if (fs.existsSync(localBinPath)) {
-    return localBinPath;
+    try {
+      if (!fs.existsSync(tempBinPath)) {
+        fs.copyFileSync(localBinPath, tempBinPath);
+      }
+      fs.chmodSync(tempBinPath, '755');
+      return tempBinPath;
+    } catch (err) {
+      console.error('Error setting up yt-dlp in /tmp:', err);
+      return localBinPath;
+    }
   }
   return 'yt-dlp';
 };
 
 export async function GET(req: NextRequest) {
-  const YT_PATH = getYTPath();
+  const YT_PATH = await getYTPath();
   const { searchParams } = new URL(req.url);
   const url = searchParams.get('url');
   const formatId = searchParams.get('formatId') || 'best';

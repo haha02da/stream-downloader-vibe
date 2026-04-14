@@ -6,20 +6,36 @@ import fs from 'fs';
 
 const execPromise = promisify(exec);
 
-// Vercel environments use a read-only filesystem, but /tmp is writable.
-// However, bin/yt-dlp is included in the deployment and is executable.
-const getYTPath = () => {
-  // Try to find it in project bin/ directory (for Vercel/Production)
+/**
+ * Vercel environment is read-only except for /tmp.
+ * We copy the binary to /tmp and give it execution permissions.
+ */
+const getYTPath = async () => {
   const localBinPath = path.join(process.cwd(), 'bin', 'yt-dlp');
+  const tempBinPath = path.join('/tmp', 'yt-dlp');
+
+  // If we are in a serverless environment (Vercel)
   if (fs.existsSync(localBinPath)) {
-    return localBinPath;
+    try {
+      // Copy to /tmp if not already there or to ensure fresh copy
+      if (!fs.existsSync(tempBinPath)) {
+        fs.copyFileSync(localBinPath, tempBinPath);
+      }
+      // Set execution permission
+      fs.chmodSync(tempBinPath, '755');
+      return tempBinPath;
+    } catch (err) {
+      console.error('Error setting up yt-dlp in /tmp:', err);
+      return localBinPath; // Fallback to local path
+    }
   }
+  
   // Fallback to system yt-dlp (for Local development)
   return 'yt-dlp';
 };
 
 export async function POST(req: NextRequest) {
-  const YT_PATH = getYTPath();
+  const YT_PATH = await getYTPath();
   try {
     const { url } = await req.json();
 
