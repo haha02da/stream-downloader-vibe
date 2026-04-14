@@ -1,10 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import path from 'path';
+import fs from 'fs';
 
 const execPromise = promisify(exec);
 
+// Vercel environments use a read-only filesystem, but /tmp is writable.
+// However, bin/yt-dlp is included in the deployment and is executable.
+const getYTPath = () => {
+  // Try to find it in project bin/ directory (for Vercel/Production)
+  const localBinPath = path.join(process.cwd(), 'bin', 'yt-dlp');
+  if (fs.existsSync(localBinPath)) {
+    return localBinPath;
+  }
+  // Fallback to system yt-dlp (for Local development)
+  return 'yt-dlp';
+};
+
 export async function POST(req: NextRequest) {
+  const YT_PATH = getYTPath();
   try {
     const { url } = await req.json();
 
@@ -14,16 +29,17 @@ export async function POST(req: NextRequest) {
 
     // 1. Check if yt-dlp is installed
     try {
-      await execPromise('yt-dlp --version');
-    } catch (err) {
+      await execPromise(`${YT_PATH} --version`);
+    } catch (err: any) {
+      console.error('yt-dlp check error:', err);
       return NextResponse.json({ 
-        error: '서버에 yt-dlp가 설치되어 있지 않습니다. README를 참고하여 설치해주세요.' 
+        error: `서버에 yt-dlp가 설치되어 있지 않거나 실행할 수 없습니다. (Path: ${YT_PATH})`,
+        details: err.message
       }, { status: 500 });
     }
 
     // 2. Fetch video metadata
-    // -j: dump JSON, --flat-playlist: don't expand playlists
-    const { stdout } = await execPromise(`yt-dlp -j --flat-playlist "${url}"`);
+    const { stdout } = await execPromise(`${YT_PATH} -j --flat-playlist "${url}"`);
     const videoInfo = JSON.parse(stdout);
 
     // 3. Prepare response data

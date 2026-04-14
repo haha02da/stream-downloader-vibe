@@ -1,8 +1,18 @@
 import { NextRequest } from 'next/server';
 import { spawn } from 'child_process';
-import { Readable } from 'stream';
+import path from 'path';
+import fs from 'fs';
+
+const getYTPath = () => {
+  const localBinPath = path.join(process.cwd(), 'bin', 'yt-dlp');
+  if (fs.existsSync(localBinPath)) {
+    return localBinPath;
+  }
+  return 'yt-dlp';
+};
 
 export async function GET(req: NextRequest) {
+  const YT_PATH = getYTPath();
   const { searchParams } = new URL(req.url);
   const url = searchParams.get('url');
   const formatId = searchParams.get('formatId') || 'best';
@@ -16,7 +26,7 @@ export async function GET(req: NextRequest) {
   // -o - : pipe output to stdout
   // -f : specify format
   // --no-playlist : only download single video
-  const ytProcess = spawn('yt-dlp', [
+  const ytProcess = spawn(YT_PATH, [
     '-f', formatId,
     '-o', '-',
     '--no-playlist',
